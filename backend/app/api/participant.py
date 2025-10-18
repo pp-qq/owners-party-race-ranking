@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 
-from db.firestore import FirestoreDB
-from schemas.participant import ParticipantSchema
+from ..db.firestore import FirestoreDB
+from ..schemas.participant import ParticipantSchema
 
 router = APIRouter()
 db = FirestoreDB()
