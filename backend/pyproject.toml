@@ -7,5 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.119.0",
     "uvicorn[standard]>=0.37.0",
-    "google-cloud-firestore>=2.21.0"
+    "google-cloud-firestore>=2.21.0",
+    "gunicorn>=21.2.0"
 ]
