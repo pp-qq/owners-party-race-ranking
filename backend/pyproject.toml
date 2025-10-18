@@ -1,0 +1,11 @@
+[project]
+name = "race-ranking-backend"
+version = "0.1.0"
+description = "徒競走結果管理アプリのバックエンドAPI (FastAPI)"
+requires-python = ">=3.12"
+
+dependencies = [
+    "fastapi>=0.119.0",
+    "uvicorn[standard]>=0.37.0",
+    "google-cloud-firestore>=2.21.0"
+]
