@@ -3,19 +3,27 @@ import React, { useState } from "react";
 interface Props {
   id: string;
   name: string;
-  best_time?: number;
-  onSave: (name: string, best_time: number) => void;
+  time?: number | null;
+  onSave: (name: string, time: number | null) => void;
 }
 
-const ParticipantForm: React.FC<Props> = ({ id, name, best_time, onSave }) => {
+const ParticipantForm: React.FC<Props> = ({ id, name, time, onSave }) => {
   const [editName, setEditName] = useState(name);
-  const [editTime, setEditTime] = useState(best_time?.toString() || "");
+  const [editTime, setEditTime] = useState(time !== null && time !== undefined ? time.toString() : "");
 
   return (
     <div>
       <input value={editName} onChange={(e) => setEditName(e.target.value)} />
       <input value={editTime} onChange={(e) => setEditTime(e.target.value)} />
-      <button onClick={() => onSave(editName, Number(editTime))}>保存</button>
+      <button
+        onClick={() => {
+          const trimmed = editTime.trim();
+          const parsed = trimmed === "" ? null : Number(trimmed);
+          onSave(editName, trimmed === "" || Number.isNaN(parsed) ? null : parsed);
+        }}
+      >
+        保存
+      </button>
     </div>
   );
 };

@@ -9,7 +9,10 @@ app = FastAPI()
 # CORS設定
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 必要に応じてフロントエンドのURLに限定
+    allow_origins=[
+        "https://owners-party-race-ranking.web.app/",
+        "https://owners-party-race-ranking.firebaseapp.com/",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

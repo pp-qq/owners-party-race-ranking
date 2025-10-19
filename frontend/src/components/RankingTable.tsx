@@ -3,7 +3,7 @@ import React from "react";
 interface Participant {
   id: string;
   name: string;
-  best_time?: number;
+  time?: number | null;
   rank?: number;
 }
 
@@ -26,7 +26,7 @@ const RankingTable: React.FC<Props> = ({ participants }) => (
         <tr key={p.id}>
           <td>{p.id}</td>
           <td>{p.name}</td>
-          <td>{p.best_time}</td>
+          <td>{p.time ?? "-"}</td>
           <td>{p.rank}</td>
         </tr>
       ))}
