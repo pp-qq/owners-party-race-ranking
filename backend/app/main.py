@@ -12,6 +12,7 @@ app.add_middleware(
     allow_origins=[
         "https://owners-party-race-ranking.web.app",
         "https://owners-party-race-ranking.firebaseapp.com",
+        "https://owners-party-race-ranking-frontend-346931705081.asia-northeast3.run.app",
     ],
     allow_credentials=True,
     allow_methods=["*"],
