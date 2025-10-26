@@ -45,6 +45,8 @@ const IndexPage: React.FC = () => {
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [manualName, setManualName] = useState("");
+  const [isNewParticipant, setIsNewParticipant] = useState(false);
 
   useEffect(() => {
     fetchRanking()
@@ -69,6 +71,8 @@ const IndexPage: React.FC = () => {
     setLookupError(null);
     setSaveError(null);
     setSaveMessage(null);
+    setManualName("");
+    setIsNewParticipant(false);
   };
 
   const handleTimeChange = (value: string) => {
@@ -97,11 +101,14 @@ const IndexPage: React.FC = () => {
         if (cancelled) return;
         setParticipantNamePreview(typeof data.name === "string" ? data.name : "");
         setLookupPending(false);
+        setIsNewParticipant(false);
+        setManualName("");
       } catch (error) {
         if (cancelled) return;
         setParticipantNamePreview(null);
         setLookupPending(false);
-        setLookupError("参加者が見つかりませんでした");
+        setIsNewParticipant(true);
+        setLookupError("参加者が見つかりませんでした。新規参加者として追加できます。");
       }
     }, 350);
 
@@ -132,13 +139,16 @@ const IndexPage: React.FC = () => {
       return;
     }
 
-    if (participantNamePreview === null) {
-      setLookupError("参加者が見つかりませんでした");
+    const creatingNew = isNewParticipant || participantNamePreview === null;
+    const resolvedName = creatingNew ? manualName.trim() : (participantNamePreview ?? "");
+
+    if (creatingNew && resolvedName === "") {
+      setSaveError("新規参加者の名前を入力してください");
       return;
     }
 
-    const nameForRecord = participantNamePreview ?? "";
-    const displayName = formatParticipantName(nameForRecord);
+    const nameForRecord = resolvedName;
+    const displayName = nameForRecord === "" ? "名前未設定" : nameForRecord;
 
     setIsSavingRecord(true);
     setSaveMessage(null);
@@ -169,6 +179,8 @@ const IndexPage: React.FC = () => {
       setNewRecordTime("");
       setParticipantNamePreview(null);
       setLookupError(null);
+      setManualName("");
+      setIsNewParticipant(false);
     } catch (error) {
       setSaveError("記録の保存に失敗しました。通信状況を確認してください。");
     } finally {
@@ -213,12 +225,18 @@ const IndexPage: React.FC = () => {
   const participantCount = participants.length;
   const bestTime = rankedParticipants.length > 0 ? getComparableTime(rankedParticipants[0]) : undefined;
   const leaderboardCaption = bestTime === undefined ? "まだ記録がありません" : `現在のベストは ${formatTime(bestTime)} 秒`;
-  const isSubmitDisabled =
-    isSavingRecord ||
-    lookupPending ||
-    participantNamePreview === null ||
-    newRecordId.trim() === "" ||
-    newRecordTime.trim() === "";
+  const canSubmit =
+    !isSavingRecord &&
+    !lookupPending &&
+    newRecordId.trim() !== "" &&
+    newRecordTime.trim() !== "" &&
+    (isNewParticipant ? manualName.trim() !== "" : participantNamePreview !== null);
+  const isSubmitDisabled = !canSubmit;
+  const participantDisplayName = lookupPending
+    ? "検索中..."
+    : isNewParticipant
+    ? manualName.trim() || "新規参加者"
+    : formatParticipantName(participantNamePreview);
 
   return (
     <div className={styles.page}>
@@ -265,10 +283,21 @@ const IndexPage: React.FC = () => {
                     inputMode="decimal"
                   />
                 </div>
+                {isNewParticipant && (
+                  <div className={styles.measureInputRow}>
+                    <input
+                      className={styles.inlineInput}
+                      value={manualName}
+                      onChange={(e) => setManualName(e.target.value)}
+                      placeholder="参加者名を入力 (必須)"
+                      maxLength={40}
+                    />
+                  </div>
+                )}
                 <div className={styles.measureNamePlate}>
                   <span className={styles.measureNameLabel}>PARTICIPANT</span>
                   <span className={styles.measureNameValue}>
-                    {lookupPending ? "検索中..." : formatParticipantName(participantNamePreview)}
+                    {participantDisplayName}
                   </span>
                 </div>
                 <div className={styles.measureActions}>
@@ -284,18 +313,25 @@ const IndexPage: React.FC = () => {
               </div>
 
               {lookupError && (
-                <p className={`${styles.measureStatus} ${styles.measureStatusError}`}>{lookupError}</p>
+                <p
+                  className={`${styles.measureStatus} ${
+                    isNewParticipant ? styles.measureStatusInfo : styles.measureStatusError
+                  }`}
+                >
+                  {lookupError}
+                </p>
               )}
               {saveError && (
                 <p className={`${styles.measureStatus} ${styles.measureStatusError}`}>{saveError}</p>
               )}
               {!saveMessage &&
-                !lookupError &&
-                participantNamePreview !== null &&
+                !lookupPending &&
                 newRecordId.trim() !== "" &&
-                !lookupPending && (
+                ((isNewParticipant && manualName.trim() !== "") || (!isNewParticipant && participantNamePreview !== null)) && (
                   <p className={`${styles.measureStatus} ${styles.measureStatusInfo}`}>
-                    {formatParticipantName(participantNamePreview)} の記録を登録できます。
+                    {isNewParticipant
+                      ? `${manualName.trim()} を新規参加者として登録できます。`
+                      : `${formatParticipantName(participantNamePreview)} の記録を登録できます。`}
                   </p>
                 )}
               {saveMessage && (
