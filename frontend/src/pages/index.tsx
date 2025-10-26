@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { fetchRanking, fetchParticipant, updateParticipant } from "../lib/api";
-import Timer from "../components/Timer";
 import styles from "../styles/Home.module.css";
 
 interface Participant {
@@ -38,13 +37,12 @@ const IndexPage: React.FC = () => {
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editTime, setEditTime] = useState("");
-  const [timerResetKey, setTimerResetKey] = useState(0);
-  const [capturedTime, setCapturedTime] = useState<number | null>(null);
-  const [participantIdInput, setParticipantIdInput] = useState("");
+  const [newRecordId, setNewRecordId] = useState("");
+  const [newRecordTime, setNewRecordTime] = useState("");
   const [participantNamePreview, setParticipantNamePreview] = useState<string | null>(null);
   const [lookupPending, setLookupPending] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
-  const [isSavingRun, setIsSavingRun] = useState(false);
+  const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -65,25 +63,16 @@ const IndexPage: React.FC = () => {
     });
   }, [participants]);
 
-  const handleTimerStart = () => {
-    setCapturedTime(null);
-    setParticipantIdInput("");
+  const handleIdChange = (value: string) => {
+    setNewRecordId(value);
     setParticipantNamePreview(null);
-    setLookupPending(false);
     setLookupError(null);
+    setSaveError(null);
     setSaveMessage(null);
-    setSaveError(null);
   };
 
-  const handleTimerStop = (elapsed: number) => {
-    setCapturedTime(elapsed);
-    setSaveError(null);
-  };
-
-  const handleParticipantIdChange = (value: string) => {
-    setParticipantIdInput(value);
-    setParticipantNamePreview(null);
-    setLookupError(null);
+  const handleTimeChange = (value: string) => {
+    setNewRecordTime(value);
     setSaveError(null);
     setSaveMessage(null);
   };
@@ -91,14 +80,7 @@ const IndexPage: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
 
-    if (capturedTime === null) {
-      setLookupPending(false);
-      setParticipantNamePreview(null);
-      setLookupError(null);
-      return;
-    }
-
-    const trimmedId = participantIdInput.trim();
+    const trimmedId = newRecordId.trim();
     if (!trimmedId) {
       setLookupPending(false);
       setParticipantNamePreview(null);
@@ -127,79 +109,72 @@ const IndexPage: React.FC = () => {
       cancelled = true;
       clearTimeout(handler);
     };
-  }, [participantIdInput, capturedTime]);
+  }, [newRecordId]);
 
-  const handleConfirmRun = async () => {
+  const handleSubmitRecord = async () => {
     setSaveError(null);
 
-    if (capturedTime === null) {
-      setSaveError("タイマーで計測を完了してください");
-      return;
-    }
-
-    const trimmedId = participantIdInput.trim();
+    const trimmedId = newRecordId.trim();
     if (!trimmedId) {
       setLookupError("参加者IDを入力してください");
       return;
     }
 
-    if (participantNamePreview === null) {
-      setLookupError("ID確認を行ってください");
+    const trimmedTime = newRecordTime.trim();
+    if (!trimmedTime) {
+      setSaveError("タイムを入力してください");
       return;
     }
 
-    const recordedTime = capturedTime;
-    const participantName = participantNamePreview;
-    const safeName = participantName.trim() === "" ? "" : participantName;
+    const parsedTime = Number(trimmedTime);
+    if (Number.isNaN(parsedTime) || parsedTime < 0) {
+      setSaveError("タイムは0以上の数値で入力してください");
+      return;
+    }
 
-    setIsSavingRun(true);
+    if (participantNamePreview === null) {
+      setLookupError("参加者が見つかりませんでした");
+      return;
+    }
+
+    const nameForRecord = participantNamePreview ?? "";
+    const displayName = formatParticipantName(nameForRecord);
+
+    setIsSavingRecord(true);
     setSaveMessage(null);
 
     try {
       await updateParticipant({
         id: trimmedId,
-        name: safeName,
-        time: recordedTime,
+        name: nameForRecord,
+        time: parsedTime,
       });
 
       setParticipants((prev) => {
         const exists = prev.some((p) => p.id === trimmedId);
         if (exists) {
           return prev.map((p) =>
-            p.id === trimmedId ? { ...p, name: participantName, time: recordedTime } : p
+            p.id === trimmedId ? { ...p, name: nameForRecord, time: parsedTime } : p
           );
         }
-        return [...prev, { id: trimmedId, name: participantName, time: recordedTime }];
+        return [...prev, { id: trimmedId, name: nameForRecord, time: parsedTime }];
       });
 
       if (editId === trimmedId) {
         setEditId(null);
       }
 
-      const displayName = participantName.trim() === "" ? "名前未設定" : participantName;
-      setSaveMessage(`${displayName}の記録を${formatTime(recordedTime)}秒で保存しました`);
-      setCapturedTime(null);
-      setParticipantIdInput("");
+      setSaveMessage(`${displayName}の記録を${formatTime(parsedTime)}秒で保存しました`);
+      setNewRecordId("");
+      setNewRecordTime("");
       setParticipantNamePreview(null);
       setLookupError(null);
-      setLookupPending(false);
-      setTimerResetKey((key) => key + 1);
     } catch (error) {
       setSaveError("記録の保存に失敗しました。通信状況を確認してください。");
     } finally {
-      setIsSavingRun(false);
+      setIsSavingRecord(false);
+      setLookupPending(false);
     }
-  };
-
-  const handleTimerReset = () => {
-    setCapturedTime(null);
-    setParticipantIdInput("");
-    setParticipantNamePreview(null);
-    setLookupPending(false);
-    setLookupError(null);
-    setSaveError(null);
-    setSaveMessage(null);
-    setIsSavingRun(false);
   };
 
   const handleEdit = (p: Participant) => {
@@ -238,6 +213,12 @@ const IndexPage: React.FC = () => {
   const participantCount = participants.length;
   const bestTime = rankedParticipants.length > 0 ? getComparableTime(rankedParticipants[0]) : undefined;
   const leaderboardCaption = bestTime === undefined ? "まだ記録がありません" : `現在のベストは ${formatTime(bestTime)} 秒`;
+  const isSubmitDisabled =
+    isSavingRecord ||
+    lookupPending ||
+    participantNamePreview === null ||
+    newRecordId.trim() === "" ||
+    newRecordTime.trim() === "";
 
   return (
     <div className={styles.page}>
@@ -253,68 +234,54 @@ const IndexPage: React.FC = () => {
         </section>
 
         <section className={styles.statusRow}>
-          <div className={styles.timerCard}>
-            <span className={styles.timerLabel}>Live Timer</span>
-            <Timer
-              onStart={handleTimerStart}
-              onStop={handleTimerStop}
-              onReset={handleTimerReset}
-              externalResetKey={timerResetKey}
-            />
-          </div>
-
           <div className={styles.measureCard}>
             <div className={styles.measureHeader}>
-              <h2 className={styles.measureTitle}>計測した記録を登録</h2>
+              <h2 className={styles.measureTitle}>記録を登録</h2>
               <p className={styles.measureSubtitle}>
-                タイマーで計測したあとに参加者IDを入力すると、自動で参加者名を確認できます。
+                ID とタイム（秒）を入力して OK を押すと、参加者の順位が更新されます。
               </p>
             </div>
 
             <div className={styles.measureBody}>
-              {capturedTime === null ? (
-                <div className={styles.measurePlaceholder}>
-                  スタート → ストップで計測を完了すると、ここに記録登録フォームが表示されます。
+              <div className={styles.measureInputs}>
+                <div className={styles.measureInputRow}>
+                  <input
+                    className={`${styles.inlineInput} ${styles.measureIdInput}`}
+                    value={newRecordId}
+                    onChange={(e) => handleIdChange(e.target.value)}
+                    placeholder="参加者IDを入力"
+                    autoFocus
+                  />
                 </div>
-              ) : (
-                <>
-                  <div className={styles.measureTime}>
-                    <span className={styles.measureTimeLabel}>RECORDED TIME</span>
-                    <span className={styles.measureTimeValue}>{formatTime(capturedTime)}秒</span>
-                  </div>
-                  <div className={styles.measureInputs}>
-                    <div className={styles.measureInputRow}>
-                      <input
-                        className={`${styles.inlineInput} ${styles.measureIdInput}`}
-                        value={participantIdInput}
-                        onChange={(e) => handleParticipantIdChange(e.target.value)}
-                        placeholder="参加者IDを入力"
-                        autoFocus
-                      />
-                    </div>
-                    <div className={styles.measureNamePlate}>
-                      <span className={styles.measureNameLabel}>PARTICIPANT</span>
-                      <span className={styles.measureNameValue}>
-                        {lookupPending ? "検索中..." : formatParticipantName(participantNamePreview)}
-                      </span>
-                    </div>
-                    <div className={styles.measureActions}>
-                      <button
-                        className={`${styles.button} ${styles.buttonPrimary}`}
-                        onClick={handleConfirmRun}
-                        disabled={
-                          isSavingRun ||
-                          lookupPending ||
-                          capturedTime === null ||
-                          participantNamePreview === null
-                        }
-                      >
-                        {isSavingRun ? "登録中..." : "記録する"}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
+                <div className={styles.measureInputRow}>
+                  <input
+                    className={styles.inlineInput}
+                    value={newRecordTime}
+                    onChange={(e) => handleTimeChange(e.target.value)}
+                    placeholder="タイムを秒単位で入力"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    inputMode="decimal"
+                  />
+                </div>
+                <div className={styles.measureNamePlate}>
+                  <span className={styles.measureNameLabel}>PARTICIPANT</span>
+                  <span className={styles.measureNameValue}>
+                    {lookupPending ? "検索中..." : formatParticipantName(participantNamePreview)}
+                  </span>
+                </div>
+                <div className={styles.measureActions}>
+                  <button
+                    className={`${styles.button} ${styles.buttonPrimary}`}
+                    onClick={handleSubmitRecord}
+                    disabled={isSubmitDisabled}
+                    type="button"
+                  >
+                    {isSavingRecord ? "登録中..." : "OK"}
+                  </button>
+                </div>
+              </div>
 
               {lookupError && (
                 <p className={`${styles.measureStatus} ${styles.measureStatusError}`}>{lookupError}</p>
@@ -325,7 +292,7 @@ const IndexPage: React.FC = () => {
               {!saveMessage &&
                 !lookupError &&
                 participantNamePreview !== null &&
-                capturedTime !== null &&
+                newRecordId.trim() !== "" &&
                 !lookupPending && (
                   <p className={`${styles.measureStatus} ${styles.measureStatusInfo}`}>
                     {formatParticipantName(participantNamePreview)} の記録を登録できます。
@@ -365,12 +332,12 @@ const IndexPage: React.FC = () => {
                 </thead>
                 <tbody>
                   {rankedParticipants.map((p, index) => (
-                    <tr key={p.id}>
-                      <td className={styles.rankCell}>
+                    <tr key={p.id} className={styles.tableRow}>
+                      <td className={styles.rankCell} data-label="順位">
                         <span className={styles.rankBadge}>{String(index + 1).padStart(2, "0")}</span>
                       </td>
-                      <td>{p.id}</td>
-                      <td className={styles.nameCell}>
+                      <td data-label="ID">{p.id}</td>
+                      <td className={styles.nameCell} data-label="名前">
                         {editId === p.id ? (
                           <input
                             className={styles.inlineInput}
@@ -381,7 +348,7 @@ const IndexPage: React.FC = () => {
                           p.name
                         )}
                       </td>
-                      <td className={styles.timeCell}>
+                      <td className={styles.timeCell} data-label="タイム (秒)">
                         {editId === p.id ? (
                           <input
                             className={styles.inlineInput}
@@ -396,7 +363,7 @@ const IndexPage: React.FC = () => {
                           formatTime(getComparableTime(p))
                         )}
                       </td>
-                      <td>
+                      <td data-label="操作">
                         <div className={styles.actions}>
                           {editId === p.id ? (
                             <button className={`${styles.button} ${styles.buttonGhost}`} onClick={handleSave}>
