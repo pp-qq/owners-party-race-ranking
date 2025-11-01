@@ -1,4 +1,4 @@
-id,name,time
-1,Alice,00:00.00
-2,Bob,00:00.00
-3,Charlie,00:00.00
+al_no,family_name,al_name,time
+1,Smith,Alice,0.0
+2,Johnson,Bob,0.0
+3,Williams,Charlie,0.0

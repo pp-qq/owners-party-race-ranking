@@ -3,8 +3,10 @@ import { fetchRanking, fetchParticipant, updateParticipant } from "../lib/api";
 import styles from "../styles/Home.module.css";
 
 interface Participant {
-  id: string;
-  name: string;
+  al_no?: string;
+  family_name?: string | null;
+  al_name?: string | null;
+  size?: string | null;
   time?: number | null;
 }
 
@@ -22,22 +24,40 @@ const formatTime = (value: number | null | undefined) => {
   return value.toFixed(2);
 };
 
-const formatParticipantName = (name: string | null) => {
-  if (name === null) {
+type ParticipantNameLike =
+  | string
+  | null
+  | undefined
+  | {
+      family_name?: string | null;
+      al_name?: string | null;
+    };
+
+const formatParticipantName = (value: ParticipantNameLike) => {
+  if (value === null || value === undefined) {
     return "未確認";
   }
-  if (name.trim() === "") {
-    return "名前未設定";
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed === "" ? "名前未設定" : trimmed;
   }
-  return name;
+
+  const familyName = value.family_name?.trim() ?? "";
+  const alName = value.al_name?.trim() ?? "";
+  const displayName = [familyName, alName].filter(Boolean).join(" ");
+
+  return displayName === "" ? "名前未設定" : displayName;
 };
 
 const IndexPage: React.FC = () => {
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [editName, setEditName] = useState("");
+  const [editAlNo, setEditAlNo] = useState<string | null>(null);
+  const [editFamilyName, setEditFamilyName] = useState("");
+  const [editAlName, setEditAlName] = useState("");
+  const [editSize, setEditSize] = useState("");
   const [editTime, setEditTime] = useState("");
-  const [newRecordId, setNewRecordId] = useState("");
+  const [newRecordAlNo, setNewRecordAlNo] = useState("");
   const [newRecordTime, setNewRecordTime] = useState("");
   const [participantNamePreview, setParticipantNamePreview] = useState<string | null>(null);
   const [lookupPending, setLookupPending] = useState(false);
@@ -45,7 +65,9 @@ const IndexPage: React.FC = () => {
   const [isSavingRecord, setIsSavingRecord] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [manualName, setManualName] = useState("");
+  const [manualFamilyName, setManualFamilyName] = useState("");
+  const [manualAlName, setManualAlName] = useState("");
+  const [manualSize, setManualSize] = useState("");
   const [isNewParticipant, setIsNewParticipant] = useState(false);
 
   useEffect(() => {
@@ -65,13 +87,15 @@ const IndexPage: React.FC = () => {
     });
   }, [participants]);
 
-  const handleIdChange = (value: string) => {
-    setNewRecordId(value);
+  const handleAlNoChange = (value: string) => {
+    setNewRecordAlNo(value);
     setParticipantNamePreview(null);
     setLookupError(null);
     setSaveError(null);
     setSaveMessage(null);
-    setManualName("");
+    setManualFamilyName("");
+    setManualAlName("");
+    setManualSize("");
     setIsNewParticipant(false);
   };
 
@@ -84,8 +108,8 @@ const IndexPage: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
 
-    const trimmedId = newRecordId.trim();
-    if (!trimmedId) {
+    const trimmedAlNo = newRecordAlNo.trim();
+    if (!trimmedAlNo) {
       setLookupPending(false);
       setParticipantNamePreview(null);
       setLookupError(null);
@@ -97,12 +121,14 @@ const IndexPage: React.FC = () => {
 
     const handler = setTimeout(async () => {
       try {
-        const data = await fetchParticipant(trimmedId);
+        const data = await fetchParticipant(trimmedAlNo);
         if (cancelled) return;
         setParticipantNamePreview(typeof data.name === "string" ? data.name : "");
         setLookupPending(false);
         setIsNewParticipant(false);
-        setManualName("");
+        setManualFamilyName("");
+        setManualAlName("");
+        setManualSize("");
       } catch (error) {
         if (cancelled) return;
         setParticipantNamePreview(null);
@@ -116,14 +142,14 @@ const IndexPage: React.FC = () => {
       cancelled = true;
       clearTimeout(handler);
     };
-  }, [newRecordId]);
+  }, [newRecordAlNo]);
 
   const handleSubmitRecord = async () => {
     setSaveError(null);
 
-    const trimmedId = newRecordId.trim();
-    if (!trimmedId) {
-      setLookupError("参加者IDを入力してください");
+    const trimmedAlNo = newRecordAlNo.trim();
+    if (!trimmedAlNo) {
+      setLookupError("AL Noを入力してください");
       return;
     }
 
@@ -140,46 +166,53 @@ const IndexPage: React.FC = () => {
     }
 
     const creatingNew = isNewParticipant || participantNamePreview === null;
-    const resolvedName = creatingNew ? manualName.trim() : (participantNamePreview ?? "");
+    const resolvedFamilyName = creatingNew ? manualFamilyName.trim() : (participantNamePreview ?? "");
+    const resolvedAlName = creatingNew ? manualAlName.trim() : (participantNamePreview ?? "");
+    const resolvedSize = creatingNew ? manualSize.trim() : (participantNamePreview ?? "");
 
-    if (creatingNew && resolvedName === "") {
+    if (creatingNew && resolvedFamilyName === "") {
       setSaveError("新規参加者の名前を入力してください");
       return;
     }
 
-    const nameForRecord = resolvedName;
-    const displayName = nameForRecord === "" ? "名前未設定" : nameForRecord;
+    const familyNameForRecord = resolvedFamilyName;
+    const alNameForRecord = resolvedAlName;
+    const displayName = familyNameForRecord + (alNameForRecord ? ` ${alNameForRecord}` : "");
 
     setIsSavingRecord(true);
     setSaveMessage(null);
 
     try {
       await updateParticipant({
-        id: trimmedId,
-        name: nameForRecord,
+        al_no: trimmedAlNo,
+        family_name: resolvedFamilyName,
+        al_name: resolvedAlName,
+        size: resolvedSize,
         time: parsedTime,
       });
 
       setParticipants((prev) => {
-        const exists = prev.some((p) => p.id === trimmedId);
+        const exists = prev.some((p) => p.al_no === trimmedAlNo);
         if (exists) {
           return prev.map((p) =>
-            p.id === trimmedId ? { ...p, name: nameForRecord, time: parsedTime } : p
+            p.al_no === trimmedAlNo ? { ...p, family_name: resolvedFamilyName, al_name: resolvedAlName, size: resolvedSize, time: parsedTime } : p
           );
         }
-        return [...prev, { id: trimmedId, name: nameForRecord, time: parsedTime }];
+        return [...prev, { al_no: trimmedAlNo, family_name: resolvedFamilyName, al_name: resolvedAlName, size: resolvedSize, time: parsedTime }];
       });
 
-      if (editId === trimmedId) {
-        setEditId(null);
+      if (editAlNo === trimmedAlNo) {
+        setEditAlNo(null);
       }
 
       setSaveMessage(`${displayName}の記録を${formatTime(parsedTime)}秒で保存しました`);
-      setNewRecordId("");
+      setNewRecordAlNo("");
       setNewRecordTime("");
       setParticipantNamePreview(null);
       setLookupError(null);
-      setManualName("");
+      setManualFamilyName("");
+      setManualAlName("");
+      setManualSize("");
       setIsNewParticipant(false);
     } catch (error) {
       setSaveError("記録の保存に失敗しました。通信状況を確認してください。");
@@ -190,36 +223,42 @@ const IndexPage: React.FC = () => {
   };
 
   const handleEdit = (p: Participant) => {
-    setEditId(p.id);
-    setEditName(p.name);
+    setEditAlNo(p.al_no ?? null);
+    setEditFamilyName(p.family_name ?? "");
+    setEditAlName(p.al_name ?? "");
+    setEditSize(p.size ?? "");
     const comparableTime = getComparableTime(p);
     setEditTime(comparableTime !== undefined ? comparableTime.toString() : "");
   };
 
   const handleSave = async () => {
-    if (!editId) return;
+    if (!editAlNo) return;
 
     const trimmed = editTime.trim();
     const parsedTime = trimmed === "" ? null : Number(trimmed);
     const timeValue = trimmed === "" || Number.isNaN(parsedTime) ? null : parsedTime;
     const updated = participants.map((p) =>
-      p.id === editId
+      p.al_no === editAlNo
         ? {
             ...p,
-            name: editName,
+            family_name: editFamilyName,
+            al_name: editAlName,
+            size: editSize,
             time: timeValue,
           }
         : p
     );
 
     await updateParticipant({
-      id: editId,
-      name: editName,
+      al_no: editAlNo,
+      family_name: editFamilyName,
+      al_name: editAlName,
+      size: editSize,
       time: timeValue,
     });
 
     setParticipants(updated);
-    setEditId(null);
+    setEditAlNo(null);
   };
 
   const participantCount = participants.length;
@@ -228,14 +267,14 @@ const IndexPage: React.FC = () => {
   const canSubmit =
     !isSavingRecord &&
     !lookupPending &&
-    newRecordId.trim() !== "" &&
+    newRecordAlNo.trim() !== "" &&
     newRecordTime.trim() !== "" &&
-    (isNewParticipant ? manualName.trim() !== "" : participantNamePreview !== null);
+    (isNewParticipant ? manualFamilyName.trim() !== "" : participantNamePreview !== null);
   const isSubmitDisabled = !canSubmit;
   const participantDisplayName = lookupPending
     ? "検索中..."
     : isNewParticipant
-    ? manualName.trim() || "新規参加者"
+    ? manualFamilyName.trim() || "新規参加者"
     : formatParticipantName(participantNamePreview);
 
   return (
@@ -265,8 +304,8 @@ const IndexPage: React.FC = () => {
                 <div className={styles.measureInputRow}>
                   <input
                     className={`${styles.inlineInput} ${styles.measureIdInput}`}
-                    value={newRecordId}
-                    onChange={(e) => handleIdChange(e.target.value)}
+                    value={newRecordAlNo}
+                    onChange={(e) => handleAlNoChange(e.target.value)}
                     placeholder="参加者IDを入力"
                     autoFocus
                   />
@@ -287,9 +326,9 @@ const IndexPage: React.FC = () => {
                   <div className={styles.measureInputRow}>
                     <input
                       className={styles.inlineInput}
-                      value={manualName}
-                      onChange={(e) => setManualName(e.target.value)}
-                      placeholder="参加者名を入力 (必須)"
+                      value={manualFamilyName}
+                      onChange={(e) => setManualFamilyName(e.target.value)}
+                      placeholder="ファミリー名を入力 (必須)"
                       maxLength={40}
                     />
                   </div>
@@ -326,11 +365,11 @@ const IndexPage: React.FC = () => {
               )}
               {!saveMessage &&
                 !lookupPending &&
-                newRecordId.trim() !== "" &&
-                ((isNewParticipant && manualName.trim() !== "") || (!isNewParticipant && participantNamePreview !== null)) && (
+                newRecordAlNo.trim() !== "" &&
+                ((isNewParticipant && manualFamilyName.trim() !== "") || (!isNewParticipant && participantNamePreview !== null)) && (
                   <p className={`${styles.measureStatus} ${styles.measureStatusInfo}`}>
                     {isNewParticipant
-                      ? `${manualName.trim()} を新規参加者として登録できます。`
+                      ? `${manualFamilyName.trim()} を新規参加者として登録できます。`
                       : `${formatParticipantName(participantNamePreview)} の記録を登録できます。`}
                   </p>
                 )}
@@ -360,32 +399,56 @@ const IndexPage: React.FC = () => {
                 <thead>
                   <tr>
                     <th>順位</th>
-                    <th>ID</th>
-                    <th>名前</th>
+                    <th>Al No</th>
+                    <th>ファミリー名</th>
+                    <th>AL名</th>
+                    <th>サイズ</th>
                     <th>タイム (秒)</th>
                     <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rankedParticipants.map((p, index) => (
-                    <tr key={p.id} className={styles.tableRow}>
+                    <tr key={p.al_no} className={styles.tableRow}>
                       <td className={styles.rankCell} data-label="順位">
                         <span className={styles.rankBadge}>{String(index + 1).padStart(2, "0")}</span>
                       </td>
-                      <td data-label="ID">{p.id}</td>
-                      <td className={styles.nameCell} data-label="名前">
-                        {editId === p.id ? (
+                      <td data-label="Al No">{p.al_no }</td>
+                      <td className={styles.nameCell} data-label="ファミリー名">
+                        {editAlNo === p.al_no ? (
                           <input
                             className={styles.inlineInput}
-                            value={editName}
-                            onChange={(e) => setEditName(e.target.value)}
+                            value={editFamilyName}
+                            onChange={(e) => setEditFamilyName(e.target.value)}
                           />
                         ) : (
-                          p.name
+                          p.family_name ?? "-"
+                        )}
+                      </td>
+                      <td className={styles.alNameCell} data-label="AL名">
+                        {editAlNo === p.al_no ? (
+                          <input
+                            className={styles.inlineInput}
+                            value={editAlName}
+                            onChange={(e) => setEditAlName(e.target.value)}
+                          />
+                        ) : (
+                          p.al_name ?? "-"
+                        )}
+                      </td>
+                      <td className={styles.sizeCell} data-label="サイズ">
+                        {editAlNo === p.al_no ? (
+                          <input
+                            className={styles.inlineInput}
+                            value={editSize}
+                            onChange={(e) => setEditSize(e.target.value)}
+                          />
+                        ) : (
+                          p.size ?? "-"
                         )}
                       </td>
                       <td className={styles.timeCell} data-label="タイム (秒)">
-                        {editId === p.id ? (
+                        {editAlNo === p.al_no ? (
                           <input
                             className={styles.inlineInput}
                             value={editTime}
@@ -401,7 +464,7 @@ const IndexPage: React.FC = () => {
                       </td>
                       <td data-label="操作">
                         <div className={styles.actions}>
-                          {editId === p.id ? (
+                          {editAlNo === p.al_no ? (
                             <button className={`${styles.button} ${styles.buttonGhost}`} onClick={handleSave}>
                               保存
                             </button>

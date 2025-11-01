@@ -7,19 +7,19 @@ class FirestoreDB:
         self.client = firestore.Client()
 
     # 参加者取得
-    def get_participant(self, participant_id: str) -> Optional[Dict[str, Any]]:
-        doc = self.client.collection("participants").document(participant_id).get()
+    def get_participant(self, al_no: str) -> Optional[Dict[str, Any]]:
+        doc = self.client.collection("participants").document(al_no).get()
         if doc.exists:
             return doc.to_dict()
         return None
 
     # 参加者新規登録
     def create_participant(self, data: Dict[str, Any]) -> None:
-        self.client.collection("participants").document(data["id"]).set(data)
+        self.client.collection("participants").document(data["al_no"]).set(data)
 
     # 参加者記録更新
-    def update_participant(self, participant_id: str, data: Dict[str, Any]) -> None:
-        self.client.collection("participants").document(participant_id).update(data)
+    def update_participant(self, al_no: str, data: Dict[str, Any]) -> None:
+        self.client.collection("participants").document(al_no).update(data)
 
     # ランキング取得
     def get_ranking(self) -> List[Dict[str, Any]]:
