@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { fetchRanking, fetchParticipant, updateParticipant } from "../lib/api";
+import { fetchRanking, fetchParticipant, updateParticipant, registerParticipant } from "../lib/api";
 import styles from "../styles/Home.module.css";
 
 interface Participant {
@@ -51,7 +51,10 @@ const formatParticipantName = (value: ParticipantNameLike) => {
 };
 
 const IndexPage: React.FC = () => {
+  const SIZE_OPTIONS = ["スタンダード", "ミディアム", "ミニチュア"] as const;
+
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [selectedSizeFilter, setSelectedSizeFilter] = useState<string>("");
   const [editAlNo, setEditAlNo] = useState<string | null>(null);
   const [editFamilyName, setEditFamilyName] = useState("");
   const [editAlName, setEditAlName] = useState("");
@@ -60,6 +63,7 @@ const IndexPage: React.FC = () => {
   const [newRecordAlNo, setNewRecordAlNo] = useState("");
   const [newRecordTime, setNewRecordTime] = useState("");
   const [participantNamePreview, setParticipantNamePreview] = useState<string | null>(null);
+  const [lookedUpParticipant, setLookedUpParticipant] = useState<Participant | null>(null);
   const [lookupPending, setLookupPending] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [isSavingRecord, setIsSavingRecord] = useState(false);
@@ -80,16 +84,22 @@ const IndexPage: React.FC = () => {
   }, []);
 
   const rankedParticipants = useMemo(() => {
-    return [...participants].sort((a, b) => {
+    const filtered = participants.filter((p) =>
+      selectedSizeFilter === "" ? true : (p.size ?? "") === selectedSizeFilter
+    );
+    return [...filtered].sort((a, b) => {
       const timeA = getComparableTime(a) ?? Number.POSITIVE_INFINITY;
       const timeB = getComparableTime(b) ?? Number.POSITIVE_INFINITY;
       return timeA - timeB;
     });
-  }, [participants]);
+  }, [participants, selectedSizeFilter]);
 
   const handleAlNoChange = (value: string) => {
-    setNewRecordAlNo(value);
+    // 整数のみ許可（非数字は削除）
+    const digitsOnly = value.replace(/\D/g, "");
+    setNewRecordAlNo(digitsOnly);
     setParticipantNamePreview(null);
+    setLookedUpParticipant(null);
     setLookupError(null);
     setSaveError(null);
     setSaveMessage(null);
@@ -123,7 +133,8 @@ const IndexPage: React.FC = () => {
       try {
         const data = await fetchParticipant(trimmedAlNo);
         if (cancelled) return;
-        setParticipantNamePreview(typeof data.name === "string" ? data.name : "");
+        setLookedUpParticipant(data as Participant);
+        setParticipantNamePreview(null); // 文字列では保持しない（オブジェクトを使用）
         setLookupPending(false);
         setIsNewParticipant(false);
         setManualFamilyName("");
@@ -132,6 +143,7 @@ const IndexPage: React.FC = () => {
       } catch (error) {
         if (cancelled) return;
         setParticipantNamePreview(null);
+        setLookedUpParticipant(null);
         setLookupPending(false);
         setIsNewParticipant(true);
         setLookupError("参加者が見つかりませんでした。新規参加者として追加できます。");
@@ -152,6 +164,10 @@ const IndexPage: React.FC = () => {
       setLookupError("AL Noを入力してください");
       return;
     }
+    if (!/^\d+$/.test(trimmedAlNo)) {
+      setLookupError("AL Noは整数のみで入力してください");
+      return;
+    }
 
     const trimmedTime = newRecordTime.trim();
     if (!trimmedTime) {
@@ -165,14 +181,24 @@ const IndexPage: React.FC = () => {
       return;
     }
 
-    const creatingNew = isNewParticipant || participantNamePreview === null;
-    const resolvedFamilyName = creatingNew ? manualFamilyName.trim() : (participantNamePreview ?? "");
-    const resolvedAlName = creatingNew ? manualAlName.trim() : (participantNamePreview ?? "");
-    const resolvedSize = creatingNew ? manualSize.trim() : (participantNamePreview ?? "");
+  const creatingNew = isNewParticipant || !lookedUpParticipant;
+  const resolvedFamilyName = creatingNew ? manualFamilyName.trim() : (lookedUpParticipant?.family_name ?? "");
+  const resolvedAlName = creatingNew ? manualAlName.trim() : (lookedUpParticipant?.al_name ?? "");
+  const resolvedSize = creatingNew ? manualSize.trim() : (lookedUpParticipant?.size ?? "");
 
-    if (creatingNew && resolvedFamilyName === "") {
-      setSaveError("新規参加者の名前を入力してください");
-      return;
+    if (creatingNew) {
+      if (resolvedFamilyName === "") {
+        setSaveError("新規参加者のファミリー名を入力してください");
+        return;
+      }
+      if (resolvedAlName === "") {
+        setSaveError("新規参加者のAL名を入力してください");
+        return;
+      }
+      if (resolvedSize === "") {
+        setSaveError("新規参加者のサイズを入力してください");
+        return;
+      }
     }
 
     const familyNameForRecord = resolvedFamilyName;
@@ -183,6 +209,17 @@ const IndexPage: React.FC = () => {
     setSaveMessage(null);
 
     try {
+      if (creatingNew) {
+        // 先に参加者を登録してから記録を更新
+        await registerParticipant({
+          al_no: trimmedAlNo,
+          family_name: resolvedFamilyName,
+          al_name: resolvedAlName,
+          size: resolvedSize,
+          time: null,
+        });
+      }
+
       await updateParticipant({
         al_no: trimmedAlNo,
         family_name: resolvedFamilyName,
@@ -209,6 +246,7 @@ const IndexPage: React.FC = () => {
       setNewRecordAlNo("");
       setNewRecordTime("");
       setParticipantNamePreview(null);
+  setLookedUpParticipant(null);
       setLookupError(null);
       setManualFamilyName("");
       setManualAlName("");
@@ -261,7 +299,7 @@ const IndexPage: React.FC = () => {
     setEditAlNo(null);
   };
 
-  const participantCount = participants.length;
+  const participantCount = rankedParticipants.length;
   const bestTime = rankedParticipants.length > 0 ? getComparableTime(rankedParticipants[0]) : undefined;
   const leaderboardCaption = bestTime === undefined ? "まだ記録がありません" : `現在のベストは ${formatTime(bestTime)} 秒`;
   const canSubmit =
@@ -269,13 +307,15 @@ const IndexPage: React.FC = () => {
     !lookupPending &&
     newRecordAlNo.trim() !== "" &&
     newRecordTime.trim() !== "" &&
-    (isNewParticipant ? manualFamilyName.trim() !== "" : participantNamePreview !== null);
+    (isNewParticipant
+      ? manualFamilyName.trim() !== "" && manualAlName.trim() !== "" && manualSize.trim() !== ""
+      : lookedUpParticipant !== null);
   const isSubmitDisabled = !canSubmit;
   const participantDisplayName = lookupPending
     ? "検索中..."
     : isNewParticipant
-    ? manualFamilyName.trim() || "新規参加者"
-    : formatParticipantName(participantNamePreview);
+    ? ([manualFamilyName.trim(), manualAlName.trim()].filter(Boolean).join(" ") || "新規参加者")
+    : formatParticipantName(lookedUpParticipant as any);
 
   return (
     <div className={styles.page}>
@@ -295,7 +335,7 @@ const IndexPage: React.FC = () => {
             <div className={styles.measureHeader}>
               <h2 className={styles.measureTitle}>記録を登録</h2>
               <p className={styles.measureSubtitle}>
-                ID とタイム（秒）を入力して OK を押すと、参加者の順位が更新されます。
+                AL No とタイム（秒）を入力して OK を押すと、参加者の順位が更新されます。
               </p>
             </div>
 
@@ -306,7 +346,10 @@ const IndexPage: React.FC = () => {
                     className={`${styles.inlineInput} ${styles.measureIdInput}`}
                     value={newRecordAlNo}
                     onChange={(e) => handleAlNoChange(e.target.value)}
-                    placeholder="参加者IDを入力"
+                    placeholder="Al Noを入力"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     autoFocus
                   />
                 </div>
@@ -323,15 +366,40 @@ const IndexPage: React.FC = () => {
                   />
                 </div>
                 {isNewParticipant && (
-                  <div className={styles.measureInputRow}>
-                    <input
-                      className={styles.inlineInput}
-                      value={manualFamilyName}
-                      onChange={(e) => setManualFamilyName(e.target.value)}
-                      placeholder="ファミリー名を入力 (必須)"
-                      maxLength={40}
-                    />
-                  </div>
+                  <>
+                    <div className={styles.measureInputRow}>
+                      <input
+                        className={styles.inlineInput}
+                        value={manualFamilyName}
+                        onChange={(e) => setManualFamilyName(e.target.value)}
+                        placeholder="ファミリー名を入力 (必須)"
+                        maxLength={40}
+                      />
+                    </div>
+                    <div className={styles.measureInputRow}>
+                      <input
+                        className={styles.inlineInput}
+                        value={manualAlName}
+                        onChange={(e) => setManualAlName(e.target.value)}
+                        placeholder="AL名を入力 (必須)"
+                        maxLength={40}
+                      />
+                    </div>
+                    <div className={styles.measureInputRow}>
+                      <select
+                        className={styles.inlineInput}
+                        value={manualSize}
+                        onChange={(e) => setManualSize(e.target.value)}
+                      >
+                        <option value="">サイズを選択 (必須)</option>
+                        {SIZE_OPTIONS.map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
                 )}
                 <div className={styles.measureNamePlate}>
                   <span className={styles.measureNameLabel}>PARTICIPANT</span>
@@ -366,11 +434,16 @@ const IndexPage: React.FC = () => {
               {!saveMessage &&
                 !lookupPending &&
                 newRecordAlNo.trim() !== "" &&
-                ((isNewParticipant && manualFamilyName.trim() !== "") || (!isNewParticipant && participantNamePreview !== null)) && (
+                ((
+                  isNewParticipant &&
+                  manualFamilyName.trim() !== "" &&
+                  manualAlName.trim() !== "" &&
+                  manualSize.trim() !== ""
+                ) || (!isNewParticipant && lookedUpParticipant !== null)) && (
                   <p className={`${styles.measureStatus} ${styles.measureStatusInfo}`}>
                     {isNewParticipant
-                      ? `${manualFamilyName.trim()} を新規参加者として登録できます。`
-                      : `${formatParticipantName(participantNamePreview)} の記録を登録できます。`}
+                      ? `${[manualFamilyName.trim(), manualAlName.trim()].filter(Boolean).join(" ")}（サイズ: ${manualSize.trim()}） を新規参加者として登録できます。`
+                      : `${formatParticipantName(lookedUpParticipant as any)} の記録を登録できます。`}
                   </p>
                 )}
               {saveMessage && (
@@ -385,6 +458,21 @@ const IndexPage: React.FC = () => {
             <div className={styles.cardTitleGroup}>
               <h2 className={styles.cardTitle}>Leaderboard</h2>
               <p className={styles.cardSubtitle}>{leaderboardCaption}</p>
+            </div>
+            <div>
+              <select
+                className={styles.inlineInput}
+                value={selectedSizeFilter}
+                onChange={(e) => setSelectedSizeFilter(e.target.value)}
+                aria-label="サイズで絞り込み"
+              >
+                <option value="">すべてのサイズ</option>
+                {SIZE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
             </div>
             <span className={styles.participantBadge}>
               <strong>{participantCount}</strong> エントリー
@@ -438,11 +526,18 @@ const IndexPage: React.FC = () => {
                       </td>
                       <td className={styles.sizeCell} data-label="サイズ">
                         {editAlNo === p.al_no ? (
-                          <input
+                          <select
                             className={styles.inlineInput}
-                            value={editSize}
+                            value={SIZE_OPTIONS.includes((editSize || "") as any) ? editSize : ""}
                             onChange={(e) => setEditSize(e.target.value)}
-                          />
+                          >
+                            <option value="">サイズを選択</option>
+                            {SIZE_OPTIONS.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt}
+                              </option>
+                            ))}
+                          </select>
                         ) : (
                           p.size ?? "-"
                         )}

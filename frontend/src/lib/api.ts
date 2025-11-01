@@ -9,11 +9,27 @@ export const fetchRanking = async () => {
 };
 
 export const updateParticipant = async (participant: any) => {
-  await fetch(`${API_BASE}/record`, {
+  const res = await fetch(`${API_BASE}/record`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(participant),
   });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Failed to update record (${res.status}) ${text}`);
+  }
+};
+
+export const registerParticipant = async (participant: any) => {
+  const res = await fetch(`${API_BASE}/participant`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(participant),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Failed to register participant (${res.status}) ${text}`);
+  }
 };
 
 export const fetchParticipant = async (id: string) => {
