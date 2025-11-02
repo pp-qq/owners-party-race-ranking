@@ -302,6 +302,35 @@ const IndexPage: React.FC = () => {
   const participantCount = rankedParticipants.length;
   const bestTime = rankedParticipants.length > 0 ? getComparableTime(rankedParticipants[0]) : undefined;
   const leaderboardCaption = bestTime === undefined ? "まだ記録がありません" : `現在のベストは ${formatTime(bestTime)} 秒`;
+
+  const exportAllSizesToExcel = () => {
+    if (selectedSizeFilter !== "") return; // "すべてのサイズ"のときのみ実行
+    const headers = ["Al No", "ファミリー名", "AL名", "サイズ", "タイム (秒)"] as const;
+    const rows = rankedParticipants.map((p) => [
+      p.al_no ?? "",
+      p.family_name ?? "",
+      p.al_name ?? "",
+      p.size ?? "",
+      p.time ?? "",
+    ]);
+    const escapeCSV = (v: unknown) => {
+      const s = (v ?? "").toString();
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const csv = [headers as unknown as string[], ...rows]
+      .map((r) => r.map(escapeCSV).join(","))
+      .join("\r\n");
+    const bom = "\uFEFF"; // ExcelでUTF-8を正しく解釈させるためのBOM
+    const blob = new Blob([bom + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const d = new Date();
+    a.href = url;
+    a.download = `leaderboard_all_sizes_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
   const canSubmit =
     !isSavingRecord &&
     !lookupPending &&
@@ -459,7 +488,7 @@ const IndexPage: React.FC = () => {
               <h2 className={styles.cardTitle}>Leaderboard</h2>
               <p className={styles.cardSubtitle}>{leaderboardCaption}</p>
             </div>
-            <div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <select
                 className={styles.inlineInput}
                 value={selectedSizeFilter}
@@ -473,6 +502,15 @@ const IndexPage: React.FC = () => {
                   </option>
                 ))}
               </select>
+              <button
+                className={`${styles.button} ${styles.buttonGhost} ${styles.exportButton}`}
+                type="button"
+                onClick={exportAllSizesToExcel}
+                disabled={selectedSizeFilter !== "" || rankedParticipants.length === 0}
+                title={selectedSizeFilter === "" ? "一覧をExcelで開けるCSVに出力" : "すべてのサイズのときのみ出力できます"}
+              >
+                Excel出力
+              </button>
             </div>
             <span className={styles.participantBadge}>
               <strong>{participantCount}</strong> エントリー

@@ -414,6 +414,17 @@
   box-shadow: 0 12px 28px rgba(56, 189, 248, 0.18);
 }
 
+/* Excel出力ボタンをエントリー数バッジと同じサイズ感にする */
+.exportButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px; /* participantBadge と同じ */
+  border-radius: 999px; /* 同じ丸み */
+  font-size: 13px; /* participantBadge と同じ */
+  font-weight: 500;
+}
+
 .emptyState {
   padding: 24px;
   text-align: center;
@@ -483,6 +494,10 @@
 
   .participantBadge {
     font-size: 12px;
+  }
+
+  .exportButton {
+    font-size: 12px; /* バッジに合わせて縮小 */
   }
 
   .table td {
